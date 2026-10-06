@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>管道清洗管理</h2>
-        <p class="page-desc">维护管道清洗记录，围绕清洗编号、清洗管段、清洗方式、清洗设备做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护管道清洗记录：待清洗→清洗中→已完成→需复查逐级流转，开始清洗记录实际日期，确认完成写入清洗长度，提交复查后管道检测生成复核事项。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记管道清洗记录</button>
@@ -65,6 +65,7 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条管道清洗记录</span>
+      <span v-if="infoMessage" class="info-text">{{ infoMessage }}</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -83,13 +84,14 @@ import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('pipe_cleaning')
 const columns = ["清洗编号", "清洗管段", "清洗方式", "清洗设备", "计划日期", "实际日期", "清洗长度", "清洗状态"]
-const actions = ["安排清洗", "开始清洗", "确认完成"]
+const actions = ["开始清洗", "确认完成", "提交复查"]
 const statuses = ["待清洗", "清洗中", "已完成", "需复查"]
 const stats = [{"label": "待清洗管段", "value": 0}, {"label": "清洗中管段", "value": 0}, {"label": "已完成管段", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const infoMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -112,18 +114,43 @@ function openCreate() {
   errorMessage.value = '管道清洗记录登记入口尚未接入审批流'
 }
 
+function todayText(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
+  infoMessage.value = ''
+  const payload: Record<string, string | number> = {}
+  if (action === '开始清洗') {
+    const input = window.prompt('请输入实际日期（YYYY-MM-DD）', todayText())
+    if (input === null) {
+      return
+    }
+    payload['实际日期'] = input.trim() || todayText()
+  }
+  if (action === '确认完成') {
+    const input = window.prompt(`请输入清洗长度（米），管段 ${row['清洗管段'] ?? ''}`)
+    if (input === null) {
+      return
+    }
+    payload['清洗长度'] = input.trim()
+  }
+  const result = applyAction(meta.key, Number(row.id), action, payload)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
   reload()
+  infoMessage.value = result.message
 }
 
 function reload() {
   errorMessage.value = ''
+  infoMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items

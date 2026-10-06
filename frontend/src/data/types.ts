@@ -17,6 +17,8 @@ export type ModuleMeta = {
   statuses: string[]
   actions: string[]
   actionTargets: Record<string, string>
+  /** 动作要求的源状态：配置后只允许从该状态逐级推进，跳级、倒序、完成后回退都会被拒绝 */
+  actionSources?: Record<string, string>
   metrics: string[]
 }
 

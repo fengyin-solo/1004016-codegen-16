@@ -48,6 +48,30 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 一次写入涉及多个模块（如清洗流转同时写检测页复核事项）时使用：
+// 先在内存里拼好完整快照，再一次性落盘；任何一组写入失败，
+// 内存与 localStorage 都恢复到写入前的快照，状态与记录一起回到上一步。
+export function commitGroups(updates: Record<string, EntryRow[]>): void {
+  const snapshot = allRows()
+  const next = { ...snapshot, ...updates }
+  cache = next
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    }
+  } catch (error) {
+    cache = snapshot
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
+      }
+    } catch {
+      // 快照也写不回时保留内存快照，至少本次进程内数据是一致的。
+    }
+    throw error instanceof Error ? error : new Error('数据写入失败，已回滚到上一步')
+  }
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)

@@ -69,3 +69,19 @@ npm run build
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `underground-pipeline-inspection:entries` 这一项，或调用 `resetModule(模块)`。
+
+## 管道清洗：计划到复查的完整流转
+
+管道清洗（`pipe_cleaning`）有独立流转服务 `frontend/src/api/cleaning-flow.ts`，规则比通用动作更严格：
+
+- 状态链固定为 **待清洗 → 清洗中 → 已完成 → 需复查**，由 `开始清洗 / 确认完成 / 提交复查`
+  三个动作逐级推进；跳级、倒序、终态后继续操作、同一动作重复提交一律拒绝。
+- **开始清洗**必须录入实际开工日期，实际日期早于计划日期（或格式非法）时停止流转，记录留在「待清洗」。
+- **确认完成**必须录入清洗长度；长度需为正数且不超过「排水管网」中该管段登记的长度，
+  超出范围即停止流转，记录留在「清洗中」。
+- **提交复查**后状态进入「需复查」，同时在管道检测页（`pipe_detect`）生成一条
+  「清洗复核」事项（按来源清洗记录 ID 去重，重复提交不会产生第二条）。
+- 跨模块写入经 `local-store.ts` 的 `commitGroups` 一次落盘：复核事项写入失败时，
+  清洗状态与检测记录一起整体回滚到上一步，不会留下半成品。
+- `frontend/scripts/run-cleaning-smoke.cjs` 是该流转的无依赖冒烟脚本（54 条断言），
+  执行方式：`cd frontend && node scripts/run-cleaning-smoke.cjs`。
